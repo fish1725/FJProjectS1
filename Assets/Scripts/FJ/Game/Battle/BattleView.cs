@@ -4,9 +4,9 @@ namespace FJ.Game.Battle
 {
     public class BattleView : View<Battle>
     {
-        protected override void InitListeners()
+        protected override void AddListeners()
         {
-            base.InitListeners();
+            base.AddListeners();
 
         }
     }

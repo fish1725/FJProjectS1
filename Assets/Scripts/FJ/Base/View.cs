@@ -4,18 +4,36 @@ namespace FJ.Base
 {
     public abstract class View<T> : MonoBehaviour where T : Model
     {
-        protected T Model { get; private set; }
+        private T _model;
+        public T Model
+        {
+            get
+            {
+                return _model;
+            }
+            set
+            {
+                if (_model != null)
+                {
+                    RemoveListeners();
+                }
+                _model = value;
+                if (_model != null) 
+                {
+                    AddListeners();
+                    _model.InvokeAllPropertyValueChanged();    
+                }
+            }
+        }
 
-        protected virtual void InitListeners()
+        protected virtual void AddListeners()
         {
 
         }
 
-        public void SetModel(T model)
+        protected virtual void RemoveListeners()
         {
-            Model = model;
-            InitListeners();
-            Model.OnViewInited();
+
         }
     }
 }

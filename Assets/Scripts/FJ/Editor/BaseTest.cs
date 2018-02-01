@@ -16,9 +16,10 @@ namespace FJ.Editor
             u.ModelName.Value = "123123";
 
             var uv = new GameObject().AddComponent<UnitView>();
-            uv.SetModel(u);
+            uv.Model = u;
             u.ModelName.Value = "123123";
             u.ModelName.Value = "1";
+
         }
 
         // A UnityTest behaves like a coroutine in PlayMode

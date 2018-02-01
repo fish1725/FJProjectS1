@@ -5,7 +5,7 @@ namespace FJ.Base
 {
     public abstract class Model
     {
-        public virtual void OnViewInited()
+        public virtual void InvokeAllPropertyValueChanged()
         {
             var props = GetType().GetProperties();
             foreach (var propertyInfo in props)

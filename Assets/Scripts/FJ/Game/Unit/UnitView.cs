@@ -7,10 +7,16 @@ namespace FJ.Game.Unit
     {
         public Transform ModelContent;
 
-        protected override void InitListeners()
+        protected override void AddListeners()
         {
-            base.InitListeners();
+            base.AddListeners();
             Model.ModelName.OnValueChanged += OnUnitModelChanged;
+        }
+
+        protected override void RemoveListeners()
+        {
+            base.RemoveListeners();
+            Model.ModelName.OnValueChanged -= OnUnitModelChanged;
         }
 
         private void OnUnitModelChanged(Property<string> property)

@@ -1,4 +1,6 @@
-﻿namespace FJ.Base
+﻿using System.Collections.Generic;
+
+namespace FJ.Base
 {
     public class Property<T>
     {
@@ -13,7 +15,7 @@
             get { return _value; }
             set
             {
-                if (_value == null ? value != null : !_value.Equals(value))
+                if (!EqualityComparer<T>.Default.Equals(_value, value))
                 {
                     _value = value;
                     OnValueChanged?.Invoke(this);
