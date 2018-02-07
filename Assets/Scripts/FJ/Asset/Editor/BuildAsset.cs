@@ -1,4 +1,4 @@
-﻿using System.Collections;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using FJ.Utils;
@@ -7,16 +7,12 @@ using UnityEngine;
 
 namespace FJ.Asset.Editor
 {
-
     public class BuildAsset
     {
-
-        public static string overloadedDevelopmentServerURL = "";
-
-        static public string CreateAssetBundleDirectory()
+        public static string CreateAssetBundleDirectory()
         {
             // Choose the output path according to the build target.
-            string outputPath = Path.Combine(Utility.AssetBundlesOutputPath, Utility.GetPlatformName());
+            var outputPath = Path.Combine(Utility.AssetBundlesOutputPath, Utility.GetPlatformName());
             if (!Directory.Exists(outputPath))
                 Directory.CreateDirectory(outputPath);
 
@@ -31,11 +27,11 @@ namespace FJ.Asset.Editor
         public static void BuildAssetBundles(AssetBundleBuild[] builds)
         {
             // Choose the output path according to the build target.
-            string outputPath = CreateAssetBundleDirectory();
+            var outputPath = CreateAssetBundleDirectory();
 
             var options = BuildAssetBundleOptions.None;
 
-            bool shouldCheckODR = EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS;
+            var shouldCheckODR = EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS;
 #if UNITY_TVOS
             shouldCheckODR |= EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS;
 #endif
@@ -51,14 +47,9 @@ namespace FJ.Asset.Editor
             }
 
             if (builds == null || builds.Length == 0)
-            {
-                //@TODO: use append hash... (Make sure pipeline works correctly with it.)
                 BuildPipeline.BuildAssetBundles(outputPath, options, EditorUserBuildSettings.activeBuildTarget);
-            }
             else
-            {
                 BuildPipeline.BuildAssetBundles(outputPath, builds, options, EditorUserBuildSettings.activeBuildTarget);
-            }
         }
 
         public static void BuildPlayer()
@@ -67,30 +58,32 @@ namespace FJ.Asset.Editor
             if (outputPath.Length == 0)
                 return;
 
-            string[] levels = GetLevelsFromBuildSettings();
+            var levels = GetLevelsFromBuildSettings();
             if (levels.Length == 0)
             {
                 Debug.Log("Nothing to build.");
                 return;
             }
 
-            string targetName = GetBuildTargetName(EditorUserBuildSettings.activeBuildTarget);
+            var targetName = GetBuildTargetName(EditorUserBuildSettings.activeBuildTarget);
             if (targetName == null)
                 return;
 
             // Build and copy AssetBundles.
-            BuildAsset.BuildAssetBundles();
+            BuildAssetBundles();
 
 #if UNITY_5_4 || UNITY_5_3 || UNITY_5_2 || UNITY_5_1 || UNITY_5_0
             BuildOptions option = EditorUserBuildSettings.development ? BuildOptions.Development : BuildOptions.None;
             BuildPipeline.BuildPlayer(levels, outputPath + targetName, EditorUserBuildSettings.activeBuildTarget, option);
 #else
-            BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions();
+            var buildPlayerOptions = new BuildPlayerOptions();
             buildPlayerOptions.scenes = levels;
             buildPlayerOptions.locationPathName = outputPath + targetName;
             buildPlayerOptions.assetBundleManifestPath = GetAssetBundleManifestFilePath();
             buildPlayerOptions.target = EditorUserBuildSettings.activeBuildTarget;
-            buildPlayerOptions.options = EditorUserBuildSettings.development ? BuildOptions.Development : BuildOptions.None;
+            buildPlayerOptions.options = EditorUserBuildSettings.development
+                ? BuildOptions.Development
+                : BuildOptions.None;
             BuildPipeline.BuildPlayer(buildPlayerOptions);
 #endif
         }
@@ -101,32 +94,34 @@ namespace FJ.Asset.Editor
             if (outputPath.Length == 0)
                 return;
 
-            string[] levels = GetLevelsFromBuildSettings();
+            var levels = GetLevelsFromBuildSettings();
             if (levels.Length == 0)
             {
                 Debug.Log("Nothing to build.");
                 return;
             }
 
-            string targetName = GetBuildTargetName(EditorUserBuildSettings.activeBuildTarget);
+            var targetName = GetBuildTargetName(EditorUserBuildSettings.activeBuildTarget);
             if (targetName == null)
                 return;
 
             // Build and copy AssetBundles.
-            BuildAsset.BuildAssetBundles();
-            BuildAsset.CopyAssetBundlesTo(Path.Combine(Application.streamingAssetsPath, Utility.AssetBundlesOutputPath));
+            BuildAssetBundles();
+            CopyAssetBundlesTo(Path.Combine(Application.streamingAssetsPath, Utility.AssetBundlesOutputPath));
             AssetDatabase.Refresh();
 
 #if UNITY_5_4 || UNITY_5_3 || UNITY_5_2 || UNITY_5_1 || UNITY_5_0
             BuildOptions option = EditorUserBuildSettings.development ? BuildOptions.Development : BuildOptions.None;
             BuildPipeline.BuildPlayer(levels, outputPath + targetName, EditorUserBuildSettings.activeBuildTarget, option);
 #else
-            BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions();
+            var buildPlayerOptions = new BuildPlayerOptions();
             buildPlayerOptions.scenes = levels;
             buildPlayerOptions.locationPathName = outputPath + targetName;
             buildPlayerOptions.assetBundleManifestPath = GetAssetBundleManifestFilePath();
             buildPlayerOptions.target = EditorUserBuildSettings.activeBuildTarget;
-            buildPlayerOptions.options = EditorUserBuildSettings.development ? BuildOptions.Development : BuildOptions.None;
+            buildPlayerOptions.options = EditorUserBuildSettings.development
+                ? BuildOptions.Development
+                : BuildOptions.None;
             BuildPipeline.BuildPlayer(buildPlayerOptions);
 #endif
         }
@@ -162,44 +157,43 @@ namespace FJ.Asset.Editor
             }
         }
 
-        static void CopyAssetBundlesTo(string outputPath)
+        private static void CopyAssetBundlesTo(string outputPath)
         {
             // Clear streaming assets folder.
             FileUtil.DeleteFileOrDirectory(Application.streamingAssetsPath);
             Directory.CreateDirectory(outputPath);
 
-            string outputFolder = Utility.GetPlatformName();
+            var outputFolder = Utility.GetPlatformName();
 
             // Setup the source folder for assetbundles.
-            var source = Path.Combine(Path.Combine(System.Environment.CurrentDirectory, Utility.AssetBundlesOutputPath), outputFolder);
-            if (!System.IO.Directory.Exists(source))
+            var source = Path.Combine(Path.Combine(Environment.CurrentDirectory, Utility.AssetBundlesOutputPath),
+                outputFolder);
+            if (!Directory.Exists(source))
                 Debug.Log("No assetBundle output folder, try to build the assetBundles first.");
 
             // Setup the destination folder for assetbundles.
-            var destination = System.IO.Path.Combine(outputPath, outputFolder);
-            if (System.IO.Directory.Exists(destination))
+            var destination = Path.Combine(outputPath, outputFolder);
+            if (Directory.Exists(destination))
                 FileUtil.DeleteFileOrDirectory(destination);
 
             FileUtil.CopyFileOrDirectory(source, destination);
         }
 
-        static string[] GetLevelsFromBuildSettings()
+        private static string[] GetLevelsFromBuildSettings()
         {
-            List<string> levels = new List<string>();
-            for (int i = 0; i < EditorBuildSettings.scenes.Length; ++i)
-            {
+            var levels = new List<string>();
+            for (var i = 0; i < EditorBuildSettings.scenes.Length; ++i)
                 if (EditorBuildSettings.scenes[i].enabled)
                     levels.Add(EditorBuildSettings.scenes[i].path);
-            }
 
             return levels.ToArray();
         }
 
-        static string GetAssetBundleManifestFilePath()
+        private static string GetAssetBundleManifestFilePath()
         {
-            var relativeAssetBundlesOutputPathForPlatform = Path.Combine(Utility.AssetBundlesOutputPath, Utility.GetPlatformName());
+            var relativeAssetBundlesOutputPathForPlatform =
+                Path.Combine(Utility.AssetBundlesOutputPath, Utility.GetPlatformName());
             return Path.Combine(relativeAssetBundlesOutputPathForPlatform, Utility.GetPlatformName()) + ".manifest";
         }
     }
 }
-
