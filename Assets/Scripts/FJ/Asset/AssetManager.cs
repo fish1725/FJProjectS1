@@ -10,17 +10,59 @@ namespace FJ.Asset
     {
         private AssetBundleManifest _manifest;
         private readonly Dictionary<string, AssetBundleRequest> _assetLoadingOperations = new Dictionary<string, AssetBundleRequest>();
+
+        public Dictionary<string, AssetBundleRequest> AssetLoadingOperations
+        {
+            get
+            {
+                return _assetLoadingOperations;
+            }
+        }
+
         private readonly Dictionary<string, UnityWebRequestAsyncOperation> _loadingAssetBundleOperations = new Dictionary<string, UnityWebRequestAsyncOperation>();
+
+        public Dictionary<string, UnityWebRequestAsyncOperation> LoadingAssetBundleOperations
+        {
+            get
+            {
+                return _loadingAssetBundleOperations;
+            }
+        }
+
         private readonly Dictionary<string, AssetBundle> _loadedAssetBundles = new Dictionary<string, AssetBundle>();
         private readonly Dictionary<string, UnityEngine.Object> _loadedAssets = new Dictionary<string, UnityEngine.Object>();
 
         public static string Url = "http://localhost:7888/";
 
+#if UNITY_EDITOR
+        private const string _simulateAssetBundles = "SimulateAssetBundles";
+#endif
+
+        public static bool SimulateAssetBundleInEditor
+        {
+            get
+            {
+#if UNITY_EDITOR
+                return UnityEditor.EditorPrefs.GetBool(_simulateAssetBundles, true);
+#else
+                return false;
+#endif
+            }
+            set
+            {
+#if UNITY_EDITOR
+                UnityEditor.EditorPrefs.SetBool(_simulateAssetBundles, value);
+#else
+
+#endif
+            }
+        }
+
         public IEnumerator Init(Action<float> onProgress, Action<string> onError)
         {
             if (_manifest == null)
             {
-                yield return StartCoroutine(LoadAssetAsync<AssetBundleManifest>(Utility.GetPlatformName(), "AssetBundleManifest", onProgress,
+                yield return StartCoroutine(LoadAssetAsync<AssetBundleManifest>(Utils.Utility.GetPlatformName(), "AssetBundleManifest", onProgress,
                 manifest => { _manifest = manifest; }, onError, true));
             }
         }
@@ -29,96 +71,111 @@ namespace FJ.Asset
         {
             T obj;
 #if UNITY_EDITOR
-            var paths = UnityEditor.AssetDatabase.GetAssetPathsFromAssetBundleAndAssetName(assetBundleName, assetName);
-            obj = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(paths[0]);
-            yield return null;
-#else
-            if (!forceReload)
+            if (SimulateAssetBundleInEditor)
             {
-                if (_manifest == null)
-                {
-                    yield return StartCoroutine(Init(onProgress, onError));
-                }
-                if (_manifest == null)
-                {
-                    onError?.Invoke("Manifest is null.");
-                    yield break;
-                }
-            }
-
-            var key = $"{assetBundleName}.{assetName}";
-            AssetBundleRequest assetOper;
-            UnityEngine.Object asset;
-            if (!_assetLoadingOperations.TryGetValue(key, out assetOper))
-            {
-                if (forceReload || !_loadedAssets.TryGetValue(key, out asset))
-                {
-                    yield return StartCoroutine(LoadAssetBundleAsync(assetBundleName, onProgress, null, onError, forceReload));
-
-                    AssetBundle assetBundle;
-                    if (_loadedAssetBundles.TryGetValue(assetBundleName, out assetBundle))
-                    {
-                        assetOper = assetBundle.LoadAssetAsync<T>(assetName);
-                        _assetLoadingOperations[key] = assetOper;
-                    }
-                    else
-                    {
-                        onError?.Invoke($"AssetBundle {assetBundleName} load error");
-                        yield break;
-                    }
-                }
-            }
-            while (assetOper != null && !assetOper.isDone)
-            {
-                try
-                {
-                    onProgress?.Invoke(assetOper.progress);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogException(ex);
-                }
+                var paths = UnityEditor.AssetDatabase.GetAssetPathsFromAssetBundleAndAssetName(assetBundleName, assetName);
+                obj = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(paths[0]);
                 yield return null;
             }
-
-            if (_assetLoadingOperations.ContainsKey(key))
-            {
-                _assetLoadingOperations.Remove(key);
-            }
-            if (_loadedAssets.TryGetValue(key, out asset))
-            {
-                obj = (T)asset;
-            }
             else
+#endif
             {
-                try
+                if (!forceReload)
                 {
-                    if (assetOper != null)
+                    if (_manifest == null)
                     {
-                        obj = (T)assetOper.asset;
-                        _loadedAssets[key] = obj;
+                        yield return StartCoroutine(Init(onProgress, onError));
                     }
-                    else
+                    if (_manifest == null)
                     {
-                        onError?.Invoke("Asset load operation is null.");
+                        onError?.Invoke("Manifest is null.");
                         yield break;
                     }
                 }
-                catch (Exception ex)
+
+                var key = $"{assetBundleName}.{assetName}";
+                AssetBundleRequest assetOper;
+                UnityEngine.Object asset;
+                if (!_assetLoadingOperations.TryGetValue(key, out assetOper))
                 {
-                    Debug.LogException(ex);
+                    if (forceReload || !_loadedAssets.TryGetValue(key, out asset))
+                    {
+                        yield return StartCoroutine(LoadAssetBundleAsync(assetBundleName, onProgress, null, onError, forceReload));
+
+                        if (!_assetLoadingOperations.TryGetValue(key, out assetOper)) 
+                        {
+                            if (forceReload || !_loadedAssets.TryGetValue(key, out asset))
+                            {
+                                AssetBundle assetBundle;
+                                if (_loadedAssetBundles.TryGetValue(assetBundleName, out assetBundle))
+                                {
+                                    Debug.LogFormat($"Load {assetName} from asset bundle {assetBundleName}");
+                                    assetOper = assetBundle.LoadAssetAsync<T>(assetName);
+                                    _assetLoadingOperations[key] = assetOper;
+                                }
+                                else
+                                {
+                                    onError?.Invoke($"AssetBundle {assetBundleName} load error");
+                                    yield break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                while (assetOper != null && !assetOper.isDone)
+                {
                     try
                     {
-                        onError?.Invoke(ex.ToString());
+                        onProgress?.Invoke(assetOper.progress);
                     }
-                    catch (Exception e)
+                    catch (Exception ex)
                     {
-                        Debug.LogException(e);
+                        Debug.LogException(ex);
                     }
-                    yield break;
+                    yield return null;
+                }
+
+                yield return null;
+
+                if (_loadedAssets.TryGetValue(key, out asset))
+                {
+                    obj = (T)asset;
+                }
+                else
+                {
+                    try
+                    {
+                        if (_assetLoadingOperations.ContainsKey(key))
+                        {
+                            _assetLoadingOperations.Remove(key);
+                        }
+                        if (assetOper != null)
+                        {
+                            obj = (T)assetOper.asset;
+                            _loadedAssets[key] = obj;
+                        }
+                        else
+                        {
+                            onError?.Invoke("Asset load operation is null.");
+                            yield break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogException(ex);
+                        try
+                        {
+                            onError?.Invoke(ex.ToString());
+                        }
+                        catch (Exception e)
+                        {
+                            Debug.LogException(e);
+                        }
+                        yield break;
+                    }
                 }
             }
-#endif
             onComplete?.Invoke(obj);
         }
 
@@ -130,6 +187,7 @@ namespace FJ.Asset
                 UnityWebRequestAsyncOperation oper;
                 if (!_loadingAssetBundleOperations.TryGetValue(assetBundleName, out oper))
                 {
+                    Debug.LogFormat($"Download asset bundle {assetBundleName}");
                     if (forceReload)
                     {
                         oper = UnityWebRequest.GetAssetBundle(System.IO.Path.Combine(Url, assetBundleName))
@@ -155,16 +213,17 @@ namespace FJ.Asset
                     yield return null;
                 }
 
-                if (_loadingAssetBundleOperations.ContainsKey(assetBundleName))
-                {
-                    _loadingAssetBundleOperations.Remove(assetBundleName);
-                }
+                yield return null;
 
                 if (_loadedAssetBundles.TryGetValue(assetBundleName, out assetBundle))
                 {
                 }
                 else
                 {
+                    if (_loadingAssetBundleOperations.ContainsKey(assetBundleName))
+                    {
+                        _loadingAssetBundleOperations.Remove(assetBundleName);
+                    }
                     if (string.IsNullOrEmpty(oper.webRequest.error))
                     {
                         try

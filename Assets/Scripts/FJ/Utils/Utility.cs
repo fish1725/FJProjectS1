@@ -4,7 +4,7 @@ using UnityEditor;
 
 #endif
 
-namespace FJ.Asset
+namespace FJ.Utils
 {
     public class Utility
     {
