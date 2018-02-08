@@ -2,6 +2,8 @@
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using FJ.Utils;
+using System.Collections.Generic;
 
 namespace FJ.Asset.Test
 {
@@ -11,49 +13,58 @@ namespace FJ.Asset.Test
         public IEnumerator AssetLoadTestWithEnumeratorPasses()
         {
             var manager = new GameObject("AssetManager").AddComponent<AssetManager>();
-            int[] isLoading = { 0 };
-            var timer = 0f;
+            yield return manager.StartCoroutine(manager.LoadManifestAsync(null, null, Assert.Fail));
+            Assert.AreEqual(0, manager.LoadedAssetBundles.Count);
+
+            yield return manager.StartCoroutine(manager.LoadAllAssetBundleAsync(null, null, Assert.Fail));
             var assetBundleNames = manager.GetAllAssetBundleNames();
+#if UNITY_EDITOR
+            if (AssetManager.SimulateAssetBundleInEditor)
+            {
+                Assert.AreEqual(0, manager.LoadedAssetBundles.Count);
+            }
+            else
+#endif
+            {
+                Assert.AreEqual(assetBundleNames.Length, manager.LoadedAssetBundles.Count);    
+            }
+
+
+
             var assetBundleName = assetBundleNames[Random.Range(0, assetBundleNames.Length)];
+            List<IEnumerator> _loads = new List<IEnumerator>();
             string[] assetNames = null;
-            manager.GetAllAssetNames(assetBundleName, strings =>
+            yield return manager.GetAllAssetNames(assetBundleName, strings =>
             {
                 assetNames = strings;
             }, Assert.Fail);
 
-            while (assetNames == null)
+            if (assetNames == null)
             {
-                yield return null;
+                Assert.Fail("Assets is missing.");
             }
 
-            while (timer < 5)
-            {
-                timer += Time.deltaTime;
-                for (var i = 0; i < 10; i++)
-                    if (Random.value < 0.2f)
-                    {
-                        isLoading[0] += 1;
-                        manager.StartCoroutine(manager.LoadAssetAsync<GameObject>(assetBundleName, assetNames[Random.Range(0, assetNames.Length)],
-                            null,
-                            obj =>
-                            {
-                                var go = Object.Instantiate(obj);
-                                go.name = obj.name;
-                                isLoading[0] -= 1;
-                            },
-                            obj =>
-                            {
-                                isLoading[0] -= 1;
-                                Debug.LogError(obj);
-                            }));
-                    }
-                yield return null;
-            }
+            for (var j = 0; j < 2; j++)
+                for (var i = 0; i < assetNames.Length; i++)
+                {
+                    var assetName = assetNames[i];
+                    _loads.Add(manager.LoadAssetAsync<GameObject>(assetBundleName, assetName,
+                        null,
+                        obj =>
+                        {
+                            var go = Object.Instantiate(obj);
+                            go.name = obj.name;
+                        },
+                        obj =>
+                        {
+                            Debug.LogError(obj);
+                        }));
+                }
+
+            yield return manager.WhenAll(_loads);
 
 
-            while (isLoading[0] > 0)
-                yield return null;
-            Assert.Zero(manager.AssetLoadingOperations.Count);
+            Assert.Zero(manager.LoadingAssetOperations.Count);
             Assert.Zero(manager.LoadingAssetBundleOperations.Count);
         }
     }
