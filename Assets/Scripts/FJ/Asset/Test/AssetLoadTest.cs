@@ -56,5 +56,20 @@ namespace FJ.Asset.Test
             Assert.Zero(manager.AssetLoadingOperations.Count);
             Assert.Zero(manager.LoadingAssetBundleOperations.Count);
         }
+
+        [UnityTest]
+        public IEnumerator AssetLoadTestWithEnumeratorPasses2()
+        {
+            var manager = new GameObject("AssetManager2").AddComponent<AssetManager2>();
+            var oper = manager.LoadAssetAsync<GameObject>("man", "M_civilian_01");
+            while (!oper.IsDone)
+            {
+                Debug.Log(oper.Progress);
+                yield return null;
+            }
+            Debug.Log(oper.Error);
+            var go = Object.Instantiate((GameObject)oper.AssetBundleRequest.asset);
+            Assert.IsNotNull(go);
+        }
     }
 }
