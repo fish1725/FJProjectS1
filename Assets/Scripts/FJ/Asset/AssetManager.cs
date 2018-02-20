@@ -20,23 +20,11 @@ namespace FJ.Asset
 
         private readonly Dictionary<string, AssetBundle> _loadedAssetBundles = new Dictionary<string, AssetBundle>();
 
-        public Dictionary<string, AssetBundle> LoadedAssetBundles
-        {
-            get
-            {
-                return _loadedAssetBundles;
-            }
-        }
+        public Dictionary<string, AssetBundle> LoadedAssetBundles => _loadedAssetBundles;
 
         private readonly Dictionary<string, Object> _loadedAssets = new Dictionary<string, Object>();
 
-        public Dictionary<string, Object> LoadedAssets
-        {
-            get
-            {
-                return _loadedAssets;
-            }
-        }
+        public Dictionary<string, Object> LoadedAssets => _loadedAssets;
 
         private AssetBundleManifest _manifest;
 
@@ -67,7 +55,6 @@ namespace FJ.Asset
             if (SimulateAssetBundleInEditor)
             {
                 onComplete?.Invoke(null);
-                yield break;
             }
             else
 #endif
@@ -153,7 +140,7 @@ namespace FJ.Asset
                 if (!LoadingAssetOperations.TryGetValue(key, out assetOper))
                     if (forceReload || !_loadedAssets.TryGetValue(key, out asset))
                     {
-                        yield return StartCoroutine(LoadAssetBundleAsync(assetBundleName, onProgress, (AssetBundle ab) =>
+                        yield return StartCoroutine(LoadAssetBundleAsync(assetBundleName, onProgress, ab =>
                         {
                             assetBundle = ab;
                         }, onError,
@@ -327,7 +314,6 @@ namespace FJ.Asset
             if (SimulateAssetBundleInEditor)
             {
                 onComplete?.Invoke(null);
-                yield break;
             }
             else
 #endif
@@ -347,16 +333,16 @@ namespace FJ.Asset
 
                 for (var i = 0; i < assetBundleNames.Length; i++)
                 {
-                    var _i = i;
+                    var ii = i;
                     var assetBundleName = assetBundleNames[i];
-                    loads[_i] = LoadAssetBundleAsync(assetBundleName, (float obj) =>
+                    loads[ii] = LoadAssetBundleAsync(assetBundleName, obj =>
                     {
-                        progress[_i] = obj;
+                        progress[ii] = obj;
                         onProgress?.Invoke(Utility.Sum(progress) / assetBundleNames.Length);
-                    }, (AssetBundle obj) =>
+                    }, obj =>
                     {
-                        assetBundles[_i] = obj;
-                    }, (string obj) =>
+                        assetBundles[ii] = obj;
+                    }, obj =>
                     {
                         onError?.Invoke(obj);
                         error += 1;

@@ -78,7 +78,7 @@ namespace FJ.Utils
         public static float Sum(float[] array)
         {
             var sum = 0f;
-            for (var i = 0; i < array.Length; i++) 
+            for (var i = 0; i < array.Length; i++)
             {
                 sum += array[i];
             }
@@ -99,15 +99,15 @@ namespace FJ.Utils
         {
             int completed = 0;
             int i = 0;
-            foreach(var coroutine in coroutines)
+            foreach (var coroutine in coroutines)
             {
                 i++;
-                var co = mono.When(coroutine, ()=> {
+                mono.When(coroutine, () =>
+                {
                     completed += 1;
                 });
-
             }
-            while(completed < i)
+            while (completed < i)
             {
                 yield return null;
             }
