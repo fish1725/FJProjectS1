@@ -5,6 +5,7 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.Networking;
 using Object = UnityEngine.Object;
+using FJ.Utils;
 using Utility = FJ.Utils.Utility;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -18,11 +19,28 @@ namespace FJ.Asset
         public static string Url = "http://localhost:7888/";
 
         private readonly Dictionary<string, AssetBundle> _loadedAssetBundles = new Dictionary<string, AssetBundle>();
+
+        public Dictionary<string, AssetBundle> LoadedAssetBundles
+        {
+            get
+            {
+                return _loadedAssetBundles;
+            }
+        }
+
         private readonly Dictionary<string, Object> _loadedAssets = new Dictionary<string, Object>();
+
+        public Dictionary<string, Object> LoadedAssets
+        {
+            get
+            {
+                return _loadedAssets;
+            }
+        }
 
         private AssetBundleManifest _manifest;
 
-        public Dictionary<string, AssetBundleRequest> AssetLoadingOperations { get; } =
+        public Dictionary<string, AssetBundleRequest> LoadingAssetOperations { get; } =
             new Dictionary<string, AssetBundleRequest>();
 
         public Dictionary<string, UnityWebRequestAsyncOperation> LoadingAssetBundleOperations { get; } =
@@ -43,16 +61,26 @@ namespace FJ.Asset
         }
 #endif
 
-        public IEnumerator Init(Action<float> onProgress, Action<AssetBundleManifest> onComplete, Action<string> onError)
+        public IEnumerator LoadManifestAsync(Action<float> onProgress, Action<AssetBundleManifest> onComplete, Action<string> onError)
         {
-            if (_manifest == null)
-                yield return StartCoroutine(LoadAssetAsync<AssetBundleManifest>(Utility.GetPlatformName(),
-                    "AssetBundleManifest", onProgress,
-                    manifest =>
-                    {
-                        _manifest = manifest;
-                        onComplete?.Invoke(_manifest);
-                    }, onError, true));
+#if UNITY_EDITOR
+            if (SimulateAssetBundleInEditor)
+            {
+                onComplete?.Invoke(null);
+                yield break;
+            }
+            else
+#endif
+            {
+                if (_manifest == null)
+                    yield return StartCoroutine(LoadAssetAsync<AssetBundleManifest>(Utility.GetPlatformName(),
+                        "AssetBundleManifest", onProgress,
+                        manifest =>
+                        {
+                            _manifest = manifest;
+                            onComplete?.Invoke(_manifest);
+                        }, onError, true, false));
+            }
         }
 
         public string[] GetAllAssetBundleNames()
@@ -66,7 +94,7 @@ namespace FJ.Asset
 #endif
         }
 
-        public void GetAllAssetNames(string assetBundleName, Action<string[]> onComplete, Action<string> onError)
+        public IEnumerator GetAllAssetNames(string assetBundleName, Action<string[]> onComplete, Action<string> onError)
         {
 #if UNITY_EDITOR
             try
@@ -84,8 +112,9 @@ namespace FJ.Asset
             {
                 onError?.Invoke(e.ToString());
             }
+            yield break;
 #else
-            StartCoroutine(LoadAssetBundleAsync(assetBundleName, null, bundle =>
+            yield return StartCoroutine(LoadAssetBundleAsync(assetBundleName, null, bundle =>
             {
                 onComplete?.Invoke(bundle.GetAllAssetNames());
             }, onError));
@@ -93,7 +122,7 @@ namespace FJ.Asset
         }
 
         public IEnumerator LoadAssetAsync<T>(string assetBundleName, string assetName, Action<float> onProgress,
-            Action<T> onComplete, Action<string> onError, bool forceReload = false) where T : Object
+            Action<T> onComplete, Action<string> onError, bool forceReload = false, bool cache = true) where T : Object
         {
             T obj;
 #if UNITY_EDITOR
@@ -109,7 +138,7 @@ namespace FJ.Asset
                 if (!forceReload)
                 {
                     if (_manifest == null)
-                        yield return StartCoroutine(Init(onProgress, null, onError));
+                        yield return StartCoroutine(LoadManifestAsync(onProgress, null, onError));
                     if (_manifest == null)
                     {
                         onError?.Invoke("Manifest is null.");
@@ -119,22 +148,25 @@ namespace FJ.Asset
 
                 var key = $"{assetBundleName}.{assetName}";
                 AssetBundleRequest assetOper;
+                AssetBundle assetBundle = null;
                 Object asset;
-                if (!AssetLoadingOperations.TryGetValue(key, out assetOper))
+                if (!LoadingAssetOperations.TryGetValue(key, out assetOper))
                     if (forceReload || !_loadedAssets.TryGetValue(key, out asset))
                     {
-                        yield return StartCoroutine(LoadAssetBundleAsync(assetBundleName, onProgress, null, onError,
-                            forceReload));
+                        yield return StartCoroutine(LoadAssetBundleAsync(assetBundleName, onProgress, (AssetBundle ab) =>
+                        {
+                            assetBundle = ab;
+                        }, onError,
+                                                                             forceReload, cache));
 
-                        if (!AssetLoadingOperations.TryGetValue(key, out assetOper))
+                        if (!LoadingAssetOperations.TryGetValue(key, out assetOper))
                             if (forceReload || !_loadedAssets.TryGetValue(key, out asset))
                             {
-                                AssetBundle assetBundle;
-                                if (_loadedAssetBundles.TryGetValue(assetBundleName, out assetBundle))
+                                if (assetBundle != null)
                                 {
                                     Debug.LogFormat($"Load {assetName} from asset bundle {assetBundleName}");
                                     assetOper = assetBundle.LoadAssetAsync<T>(assetName);
-                                    AssetLoadingOperations[key] = assetOper;
+                                    LoadingAssetOperations[key] = assetOper;
                                 }
                                 else
                                 {
@@ -164,12 +196,23 @@ namespace FJ.Asset
                 else
                     try
                     {
-                        if (AssetLoadingOperations.ContainsKey(key))
-                            AssetLoadingOperations.Remove(key);
+                        if (LoadingAssetOperations.ContainsKey(key))
+                            LoadingAssetOperations.Remove(key);
                         if (assetOper != null)
                         {
                             obj = (T)assetOper.asset;
-                            _loadedAssets[key] = obj;
+                            if (cache)
+                            {
+                                _loadedAssets[key] = obj;
+                            }
+                            else
+                            {
+                                if (assetBundle != null)
+                                {
+                                    assetBundle.Unload(false);
+                                    Debug.LogFormat($"Unload asset bundle {assetBundleName}");
+                                }
+                            }
                         }
                         else
                         {
@@ -195,7 +238,7 @@ namespace FJ.Asset
         }
 
         public IEnumerator LoadAssetBundleAsync(string assetBundleName, Action<float> onProgress,
-            Action<AssetBundle> onComplete, Action<string> onError, bool forceReload = false)
+            Action<AssetBundle> onComplete, Action<string> onError, bool forceReload = false, bool cache = true)
         {
             AssetBundle assetBundle;
             if (forceReload || !_loadedAssetBundles.TryGetValue(assetBundleName, out assetBundle))
@@ -214,6 +257,7 @@ namespace FJ.Asset
 
                     LoadingAssetBundleOperations[assetBundleName] = oper;
                 }
+                yield return null;
                 while (!oper.isDone)
                 {
                     try
@@ -227,8 +271,6 @@ namespace FJ.Asset
                     yield return null;
                 }
 
-                yield return null;
-
                 if (_loadedAssetBundles.TryGetValue(assetBundleName, out assetBundle))
                 {
                 }
@@ -236,12 +278,28 @@ namespace FJ.Asset
                 {
                     if (LoadingAssetBundleOperations.ContainsKey(assetBundleName))
                         LoadingAssetBundleOperations.Remove(assetBundleName);
-                    if (string.IsNullOrEmpty(oper.webRequest.error))
+                    if (oper.webRequest.isHttpError || oper.webRequest.isNetworkError)
+                    {
+                        try
+                        {
+                            onError?.Invoke(oper.webRequest.error);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogException(ex);
+                        }
+                        yield break;
+                    }
+                    else
                     {
                         try
                         {
                             assetBundle = DownloadHandlerAssetBundle.GetContent(oper.webRequest);
-                            _loadedAssetBundles[assetBundleName] = assetBundle;
+                            if (cache)
+                            {
+                                _loadedAssetBundles[assetBundleName] = assetBundle;
+                                Debug.LogFormat($"Cache asset bundle {assetBundleName}");
+                            }
                         }
                         catch (Exception e)
                         {
@@ -257,21 +315,61 @@ namespace FJ.Asset
                             yield break;
                         }
                     }
-                    else
-                    {
-                        try
-                        {
-                            onError?.Invoke(oper.webRequest.error);
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogException(ex);
-                        }
-                        yield break;
-                    }
                 }
             }
             onComplete?.Invoke(assetBundle);
+        }
+
+        public IEnumerator LoadAllAssetBundleAsync(Action<float> onProgress,
+            Action<AssetBundle[]> onComplete, Action<string> onError)
+        {
+#if UNITY_EDITOR
+            if (SimulateAssetBundleInEditor)
+            {
+                onComplete?.Invoke(null);
+                yield break;
+            }
+            else
+#endif
+            {
+                if (_manifest == null)
+                    yield return StartCoroutine(LoadManifestAsync(onProgress, null, onError));
+                if (_manifest == null)
+                {
+                    onError?.Invoke("Manifest is null.");
+                    yield break;
+                }
+                var assetBundleNames = GetAllAssetBundleNames();
+                float[] progress = new float[assetBundleNames.Length];
+                AssetBundle[] assetBundles = new AssetBundle[assetBundleNames.Length];
+                int error = 0;
+                IEnumerator[] loads = new IEnumerator[assetBundleNames.Length];
+
+                for (var i = 0; i < assetBundleNames.Length; i++)
+                {
+                    var _i = i;
+                    var assetBundleName = assetBundleNames[i];
+                    loads[_i] = LoadAssetBundleAsync(assetBundleName, (float obj) =>
+                    {
+                        progress[_i] = obj;
+                        onProgress?.Invoke(Utility.Sum(progress) / assetBundleNames.Length);
+                    }, (AssetBundle obj) =>
+                    {
+                        assetBundles[_i] = obj;
+                    }, (string obj) =>
+                    {
+                        onError?.Invoke(obj);
+                        error += 1;
+                    });
+                }
+                yield return this.WhenAll(loads);
+
+                if (error > 0)
+                {
+                    yield break;
+                }
+                onComplete?.Invoke(assetBundles);
+            }
         }
     }
 }

@@ -1,4 +1,7 @@
 using UnityEngine;
+using System.Collections.Generic;
+using System.Collections;
+using System;
 #if UNITY_EDITOR
 using UnityEditor;
 
@@ -6,7 +9,7 @@ using UnityEditor;
 
 namespace FJ.Utils
 {
-    public class Utility
+    public static class Utility
     {
         public const string AssetBundlesOutputPath = "AssetBundles";
 
@@ -70,6 +73,52 @@ namespace FJ.Utils
                 default:
                     return null;
             }
+        }
+
+        public static float Sum(float[] array)
+        {
+            var sum = 0f;
+            for (var i = 0; i < array.Length; i++) 
+            {
+                sum += array[i];
+            }
+            return sum;
+        }
+
+        public static Coroutine WhenAll(this MonoBehaviour mono, IEnumerable<IEnumerator> coroutines, Action onComplete = null)
+        {
+            return mono.StartCoroutine(mono.StartCoroutineAll(coroutines, onComplete));
+        }
+
+        public static Coroutine When(this MonoBehaviour mono, IEnumerator coroutine, Action onComplete)
+        {
+            return mono.StartCoroutine(mono.StartCoroutine(coroutine, onComplete));
+        }
+
+        public static IEnumerator StartCoroutineAll(this MonoBehaviour mono, IEnumerable<IEnumerator> coroutines, Action onComplete)
+        {
+            int completed = 0;
+            int i = 0;
+            foreach(var coroutine in coroutines)
+            {
+                i++;
+                var co = mono.When(coroutine, ()=> {
+                    completed += 1;
+                });
+
+            }
+            while(completed < i)
+            {
+                yield return null;
+            }
+            onComplete?.Invoke();
+        }
+
+        public static IEnumerator StartCoroutine(this MonoBehaviour mono, IEnumerator coroutine, Action onComplete)
+        {
+            var co = mono.StartCoroutine(coroutine);
+            yield return co;
+            onComplete?.Invoke();
         }
     }
 }
